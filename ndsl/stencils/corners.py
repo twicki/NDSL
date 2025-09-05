@@ -1,5 +1,6 @@
 from typing import Optional, Sequence, Tuple
 
+import dace
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, horizontal, interval, region
 
@@ -14,41 +15,144 @@ from ndsl.dsl.stencil import GridIndexing, StencilFactory
 from ndsl.dsl.typing import FloatField
 
 
+def two_dimensional_corner_copy_x(field_to_copy):
+    """Equivalent to the copy_corners_x functions in fortran.
+
+    This is written to operate on plain ndarrarys and not use the GT4Py framework.
+    This choice was made because we've seen a lot of performance left on the table using
+    orchestration without explicitly describing the operations but rather have full 3d-
+    sweeps with conditionals.
+    Since DaCe can handle (simple) operations on ndarrays directly this gives us a more
+    explicit entrypoint to the language and more optimization-potential.
+
+    Args:
+        field_to_copy (ndarray): field to apply the corner copy on.
+            This is explicitly not typehinted for orchestration
+    """
+    field_to_copy[0, 0] = field_to_copy[0, 5]
+    field_to_copy[0, 1] = field_to_copy[1, 5]
+    field_to_copy[0, 2] = field_to_copy[2, 5]
+
+    field_to_copy[1, 0] = field_to_copy[0, 4]
+    field_to_copy[1, 1] = field_to_copy[1, 4]
+    field_to_copy[1, 2] = field_to_copy[2, 4]
+
+    field_to_copy[2, 0] = field_to_copy[0, 3]
+    field_to_copy[2, 1] = field_to_copy[1, 3]
+    field_to_copy[2, 2] = field_to_copy[2, 3]
+
+    field_to_copy[0, -4] = field_to_copy[2, -7]
+    field_to_copy[0, -3] = field_to_copy[1, -7]
+    field_to_copy[0, -2] = field_to_copy[0, -7]
+
+    field_to_copy[1, -4] = field_to_copy[2, -6]
+    field_to_copy[1, -3] = field_to_copy[1, -6]
+    field_to_copy[1, -2] = field_to_copy[0, -6]
+
+    field_to_copy[2, -4] = field_to_copy[2, -5]
+    field_to_copy[2, -3] = field_to_copy[1, -5]
+    field_to_copy[2, -2] = field_to_copy[0, -5]
+
+    field_to_copy[-4, 0] = field_to_copy[-2, 3]
+    field_to_copy[-4, 1] = field_to_copy[-3, 3]
+    field_to_copy[-4, 2] = field_to_copy[-4, 3]
+
+    field_to_copy[-3, 0] = field_to_copy[-2, 4]
+    field_to_copy[-3, 1] = field_to_copy[-3, 4]
+    field_to_copy[-3, 2] = field_to_copy[-4, 4]
+
+    field_to_copy[-2, 0] = field_to_copy[-2, 5]
+    field_to_copy[-2, 1] = field_to_copy[-3, 5]
+    field_to_copy[-2, 2] = field_to_copy[-4, 5]
+
+    field_to_copy[-4, -2] = field_to_copy[-2, -5]
+    field_to_copy[-4, -3] = field_to_copy[-3, -5]
+    field_to_copy[-4, -4] = field_to_copy[-4, -5]
+
+    field_to_copy[-3, -2] = field_to_copy[-2, -6]
+    field_to_copy[-3, -3] = field_to_copy[-3, -6]
+    field_to_copy[-3, -4] = field_to_copy[-4, -6]
+
+    field_to_copy[-2, -2] = field_to_copy[-2, -7]
+    field_to_copy[-2, -3] = field_to_copy[-3, -7]
+    field_to_copy[-2, -4] = field_to_copy[-4, -7]
+
+
+def two_dimensional_corner_copy_y(field_to_copy):
+    """Equivalent to the copy_corners_y functions in fortran.
+
+    This is written to operate on plain ndarrarys and not use the GT4Py framework.
+    This choice was made because we've seen a lot of performance left on the table using
+    orchestration without explicitly describing the operations but rather have full 3d-
+    sweeps with conditionals.
+    Since DaCe can handle (simple) operations on ndarrays directly this gives us a more
+    explicit entrypoint to the language and more optimization-potential.
+
+    Args:
+        field_to_copy (ndarray): field to apply the corner copy on.
+            This is explicitly not typehinted for orchestration
+    """
+    field_to_copy[0, 0] = field_to_copy[5, 0]
+    field_to_copy[1, 0] = field_to_copy[5, 1]
+    field_to_copy[2, 0] = field_to_copy[5, 2]
+
+    field_to_copy[0, 1] = field_to_copy[4, 0]
+    field_to_copy[1, 1] = field_to_copy[4, 1]
+    field_to_copy[2, 1] = field_to_copy[4, 2]
+
+    field_to_copy[0, 2] = field_to_copy[3, 0]
+    field_to_copy[1, 2] = field_to_copy[3, 1]
+    field_to_copy[2, 2] = field_to_copy[3, 2]
+
+    field_to_copy[-4, 0] = field_to_copy[-7, 2]
+    field_to_copy[-3, 0] = field_to_copy[-7, 1]
+    field_to_copy[-2, 0] = field_to_copy[-7, 0]
+
+    field_to_copy[-4, 1] = field_to_copy[-6, 2]
+    field_to_copy[-3, 1] = field_to_copy[-6, 1]
+    field_to_copy[-2, 1] = field_to_copy[-6, 0]
+
+    field_to_copy[-4, 2] = field_to_copy[-5, 2]
+    field_to_copy[-3, 2] = field_to_copy[-5, 1]
+    field_to_copy[-2, 2] = field_to_copy[-5, 0]
+
+    field_to_copy[0, -2] = field_to_copy[5, -2]
+    field_to_copy[0, -3] = field_to_copy[4, -2]
+    field_to_copy[0, -4] = field_to_copy[3, -2]
+
+    field_to_copy[1, -2] = field_to_copy[5, -3]
+    field_to_copy[1, -3] = field_to_copy[4, -3]
+    field_to_copy[1, -4] = field_to_copy[3, -3]
+
+    field_to_copy[2, -2] = field_to_copy[5, -4]
+    field_to_copy[2, -3] = field_to_copy[4, -4]
+    field_to_copy[2, -4] = field_to_copy[3, -4]
+
+    field_to_copy[-2, -4] = field_to_copy[-5, -2]
+    field_to_copy[-2, -3] = field_to_copy[-6, -2]
+    field_to_copy[-2, -2] = field_to_copy[-7, -2]
+
+    field_to_copy[-3, -4] = field_to_copy[-5, -3]
+    field_to_copy[-3, -3] = field_to_copy[-6, -3]
+    field_to_copy[-3, -2] = field_to_copy[-7, -3]
+
+    field_to_copy[-4, -4] = field_to_copy[-5, -4]
+    field_to_copy[-4, -3] = field_to_copy[-6, -4]
+    field_to_copy[-4, -2] = field_to_copy[-7, -4]
+
+
 class CopyCorners:
     """
     Helper-class to copy corners corresponding to the fortran functions
     copy_corners_x or copy_corners_y respectively
     """
 
-    def __init__(self, direction: str, stencil_factory: StencilFactory) -> None:
+    def __init__(self, direction: str) -> None:
         """The grid for this stencil"""
-        grid_indexing = stencil_factory.grid_indexing
 
-        n_halo = grid_indexing.n_halo
-        origin, domain = grid_indexing.get_origin_domain(
-            dims=[X_DIM, Y_DIM, Z_INTERFACE_DIM], halos=(n_halo, n_halo)
-        )
+        self.direction = direction
 
-        ax_offsets = grid_indexing.axis_offsets(origin, domain)
-        if direction == "x":
-            self._copy_corners = stencil_factory.from_origin_domain(
-                func=copy_corners_x_stencil_defn,
-                origin=origin,
-                domain=domain,
-                externals={
-                    **ax_offsets,
-                },
-            )
-        elif direction == "y":
-            self._copy_corners = stencil_factory.from_origin_domain(
-                func=copy_corners_y_stencil_defn,
-                origin=origin,
-                domain=domain,
-                externals={
-                    **ax_offsets,
-                },
-            )
-        else:
+        if direction not in ["x", "y"]:
             raise ValueError("Direction must be either 'x' or 'y'")
 
     def __call__(self, field: FloatField):
@@ -56,63 +160,12 @@ class CopyCorners:
         Fills cell quantity field using corners from itself and multipliers
         in the direction specified initialization of the instance of this class.
         """
-        self._copy_corners(field, field)
-
-
-class CopyCornersXY:
-    """
-    Helper-class to copy corners corresponding to the Fortran functions
-    copy_corners_x and copy_corners_y
-    """
-
-    def __init__(
-        self,
-        stencil_factory: StencilFactory,
-        dims: Sequence[str],
-        y_field,
-    ) -> None:
-        """
-        Args:
-            stencil_factory: creates stencils
-            dims: dimensionality of the data to be copied
-            y_field: 3D gt4py storage to use for y-differenceable field
-                (x-differenceable field uses same memory as base field)
-        """
-        grid_indexing = stencil_factory.grid_indexing
-        origin, domain = grid_indexing.get_origin_domain(
-            dims=dims, halos=(grid_indexing.n_halo, grid_indexing.n_halo)
-        )
-
-        self._y_field = y_field
-
-        ax_offsets = grid_indexing.axis_offsets(origin, domain)
-        self._copy_corners_xy = stencil_factory.from_origin_domain(
-            func=copy_corners_xy_stencil_defn,
-            origin=origin,
-            domain=domain,
-            externals={
-                **ax_offsets,
-            },
-        )
-
-    def __call__(self, field: FloatField):
-        """
-        Fills cell quantity field using corners from itself.
-
-        Args:
-            field: field to fill corners
-
-        Returns:
-            x_differenceable: input field, updated so it can be differenced
-                in x-direction
-            y_differenceable: copy of input field which can be differenced
-                in y-direction
-        """
-        # we could avoid aliasing field for the x-differenceable output, but this
-        # requires selectively validating the halos, since the Fortran code does the
-        # final (x-direction) corners copy directly on the base field
-        self._copy_corners_xy(field, field, self._y_field)
-        return field, self._y_field
+        if self.direction == "x":
+            for k in dace.map[field.shape[2]]:
+                two_dimensional_corner_copy_x(field[:, :, k])
+        else:
+            for k in dace.map[field.shape[2]]:
+                two_dimensional_corner_copy_y(field[:, :, k])
 
 
 def kslice_from_inputs(
@@ -308,9 +361,7 @@ def copy_corners_x_stencil_defn(q_in: FloatField, q_out: FloatField):
     from __externals__ import i_end, i_start, j_end, j_start
 
     with computation(PARALLEL), interval(...):
-        with horizontal(
-            region[i_start - 3, j_start - 3], region[i_end + 3, j_start - 3]
-        ):
+        with horizontal(region[i_end + 3, j_start - 3]):
             q_out = q_in[0, 5, 0]
         with horizontal(
             region[i_start - 2, j_start - 3], region[i_end + 3, j_start - 2]
@@ -422,124 +473,6 @@ def copy_corners_y_stencil_defn(q_in: FloatField, q_out: FloatField):
             q_out = q_in[-2, -1, 0]
         with horizontal(region[i_end + 3, j_start - 1], region[i_end + 1, j_end + 3]):
             q_out = q_in[-3, -2, 0]
-
-
-def copy_corners_xy_stencil_defn(
-    q_in: FloatField, q_out_x: FloatField, q_out_y: FloatField
-):
-    from __externals__ import i_end, i_start, j_end, j_start
-
-    with computation(PARALLEL), interval(...):
-        q_out_x = q_in
-        q_out_y = q_in
-        with horizontal(
-            region[i_start - 3, j_start - 3], region[i_end + 3, j_start - 3]
-        ):
-            q_out_x = q_in[0, 5, 0]
-        with horizontal(
-            region[i_start - 2, j_start - 3], region[i_end + 3, j_start - 2]
-        ):
-            q_out_x = q_in[-1, 4, 0]
-        with horizontal(
-            region[i_start - 1, j_start - 3], region[i_end + 3, j_start - 1]
-        ):
-            q_out_x = q_in[-2, 3, 0]
-        with horizontal(
-            region[i_start - 3, j_start - 2], region[i_end + 2, j_start - 3]
-        ):
-            q_out_x = q_in[1, 4, 0]
-        with horizontal(
-            region[i_start - 2, j_start - 2], region[i_end + 2, j_start - 2]
-        ):
-            q_out_x = q_in[0, 3, 0]
-        with horizontal(
-            region[i_start - 1, j_start - 2], region[i_end + 2, j_start - 1]
-        ):
-            q_out_x = q_in[-1, 2, 0]
-        with horizontal(
-            region[i_start - 3, j_start - 1], region[i_end + 1, j_start - 3]
-        ):
-            q_out_x = q_in[2, 3, 0]
-        with horizontal(
-            region[i_start - 2, j_start - 1], region[i_end + 1, j_start - 2]
-        ):
-            q_out_x = q_in[1, 2, 0]
-        with horizontal(
-            region[i_start - 1, j_start - 1], region[i_end + 1, j_start - 1]
-        ):
-            q_out_x = q_in[0, 1, 0]
-        with horizontal(region[i_start - 3, j_end + 1], region[i_end + 1, j_end + 3]):
-            q_out_x = q_in[2, -3, 0]
-        with horizontal(region[i_start - 2, j_end + 1], region[i_end + 1, j_end + 2]):
-            q_out_x = q_in[1, -2, 0]
-        with horizontal(region[i_start - 1, j_end + 1], region[i_end + 1, j_end + 1]):
-            q_out_x = q_in[0, -1, 0]
-        with horizontal(region[i_start - 3, j_end + 2], region[i_end + 2, j_end + 3]):
-            q_out_x = q_in[1, -4, 0]
-        with horizontal(region[i_start - 2, j_end + 2], region[i_end + 2, j_end + 2]):
-            q_out_x = q_in[0, -3, 0]
-        with horizontal(region[i_start - 1, j_end + 2], region[i_end + 2, j_end + 1]):
-            q_out_x = q_in[-1, -2, 0]
-        with horizontal(region[i_start - 3, j_end + 3], region[i_end + 3, j_end + 3]):
-            q_out_x = q_in[0, -5, 0]
-        with horizontal(region[i_start - 2, j_end + 3], region[i_end + 3, j_end + 2]):
-            q_out_x = q_in[-1, -4, 0]
-        with horizontal(region[i_start - 1, j_end + 3], region[i_end + 3, j_end + 1]):
-            q_out_x = q_in[-2, -3, 0]
-        with horizontal(
-            region[i_start - 3, j_start - 3], region[i_start - 3, j_end + 3]
-        ):
-            q_out_y = q_in[5, 0, 0]
-        with horizontal(
-            region[i_start - 2, j_start - 3], region[i_start - 3, j_end + 2]
-        ):
-            q_out_y = q_in[4, 1, 0]
-        with horizontal(
-            region[i_start - 1, j_start - 3], region[i_start - 3, j_end + 1]
-        ):
-            q_out_y = q_in[3, 2, 0]
-        with horizontal(
-            region[i_start - 3, j_start - 2], region[i_start - 2, j_end + 3]
-        ):
-            q_out_y = q_in[4, -1, 0]
-        with horizontal(
-            region[i_start - 2, j_start - 2], region[i_start - 2, j_end + 2]
-        ):
-            q_out_y = q_in[3, 0, 0]
-        with horizontal(
-            region[i_start - 1, j_start - 2], region[i_start - 2, j_end + 1]
-        ):
-            q_out_y = q_in[2, 1, 0]
-        with horizontal(
-            region[i_start - 3, j_start - 1], region[i_start - 1, j_end + 3]
-        ):
-            q_out_y = q_in[3, -2, 0]
-        with horizontal(
-            region[i_start - 2, j_start - 1], region[i_start - 1, j_end + 2]
-        ):
-            q_out_y = q_in[2, -1, 0]
-        with horizontal(
-            region[i_start - 1, j_start - 1], region[i_start - 1, j_end + 1]
-        ):
-            q_out_y = q_in[1, 0, 0]
-        with horizontal(region[i_end + 1, j_start - 3], region[i_end + 3, j_end + 1]):
-            q_out_y = q_in[-3, 2, 0]
-        with horizontal(region[i_end + 2, j_start - 3], region[i_end + 3, j_end + 2]):
-            q_out_y = q_in[-4, 1, 0]
-        with horizontal(region[i_end + 3, j_start - 3], region[i_end + 3, j_end + 3]):
-            q_out_y = q_in[-5, 0, 0]
-        with horizontal(region[i_end + 1, j_start - 2], region[i_end + 2, j_end + 1]):
-            q_out_y = q_in[-2, 1, 0]
-        with horizontal(region[i_end + 2, j_start - 2], region[i_end + 2, j_end + 2]):
-            q_out_y = q_in[-3, 0, 0]
-        with horizontal(region[i_end + 3, j_start - 2], region[i_end + 2, j_end + 3]):
-            q_out_y = q_in[-4, -1, 0]
-        with horizontal(region[i_end + 1, j_start - 1], region[i_end + 1, j_end + 1]):
-            q_out_y = q_in[-1, 0, 0]
-        with horizontal(region[i_end + 2, j_start - 1], region[i_end + 1, j_end + 2]):
-            q_out_y = q_in[-2, -1, 0]
-        with horizontal(region[i_end + 3, j_start - 1], region[i_end + 1, j_end + 3]):
-            q_out_y = q_in[-3, -2, 0]
 
 
 class FillCornersBGrid:

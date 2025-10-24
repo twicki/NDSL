@@ -290,7 +290,7 @@ def test_frozen_field_after_parameter() -> None:
     )
 
 
-@pytest.mark.parametrize("backend", ("numpy", "cuda"))
+@pytest.mark.parametrize("backend", ("numpy", "gt:gpu"))
 def test_backend_options(
     backend: str,
     rebuild: bool = True,
@@ -303,8 +303,8 @@ def test_backend_options(
             "format_source": False,
             "name": "tests.dsl.test_stencil_wrapper.copy_stencil",
         },
-        "cuda": {
-            "backend": "cuda",
+        "gt:gpu": {
+            "backend": "gt:gpu",
             "rebuild": True,
             "device_sync": False,
             "format_source": False,
